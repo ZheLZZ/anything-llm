@@ -11,6 +11,7 @@ storage/tmp/*
 storage/vector-cache/*.json
 storage/exports
 storage/imports
+storage/backups/
 storage/anythingllm-fs/*
 storage/generated-files/*
 storage/generated-images/*

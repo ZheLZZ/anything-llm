@@ -8,7 +8,11 @@ const {
   getVectorDbClass,
   resolveProviderConnector,
 } = require("../../../utils/helpers");
-const { multiUserMode, reqBody } = require("../../../utils/http");
+const {
+  multiUserMode,
+  reqBody,
+  safeJsonParse,
+} = require("../../../utils/http");
 const { validApiKey } = require("../../../utils/middleware/validApiKey");
 const { VALID_CHAT_MODE } = require("../../../utils/chats/stream");
 const { EventLogs } = require("../../../models/eventLogs");
@@ -21,6 +25,42 @@ const { getModelTag } = require("../../utils");
 const {
   workspaceDeletionProtection,
 } = require("../../../utils/middleware/workspaceDeletionProtection");
+
+const MAX_CHUNK_CONTEXT_SIZE = 10;
+
+function parseChunkContextSize(value, fallback = 2) {
+  if (value === undefined) return fallback;
+  if (!["string", "number"].includes(typeof value)) return null;
+  if (typeof value === "string" && !/^\d+$/.test(value)) return null;
+
+  const parsed = Number(value);
+  if (
+    !Number.isSafeInteger(parsed) ||
+    parsed < 0 ||
+    parsed > MAX_CHUNK_CONTEXT_SIZE
+  )
+    return null;
+  return parsed;
+}
+
+function buildChunkPosition(record) {
+  const available =
+    Number.isInteger(record?.chunkIndex) &&
+    Number.isInteger(record?.chunkCount) &&
+    record.chunkIndex >= 0 &&
+    record.chunkCount > 0 &&
+    record.chunkIndex < record.chunkCount &&
+    typeof record.chunkText === "string";
+
+  if (!available) return { available: false, reindexRequired: true };
+  return {
+    available: true,
+    docId: record.docId,
+    chunkIndex: record.chunkIndex,
+    chunkNumber: record.chunkIndex + 1,
+    chunkCount: record.chunkCount,
+  };
+}
 
 function apiWorkspaceEndpoints(app) {
   if (!app) return;
@@ -943,7 +983,14 @@ function apiWorkspaceEndpoints(app) {
                     tokenCount: 9
                   },
                   distance: 0.541887640953064,
-                  score: 0.45811235904693604
+                  score: 0.45811235904693604,
+                  position: {
+                    available: true,
+                    docId: "e1c14c2e-3842-4b3f-9b77-09d65b85347a",
+                    chunkIndex: 5,
+                    chunkNumber: 6,
+                    chunkCount: 20
+                  }
                 }
               ]
             }
@@ -1004,6 +1051,16 @@ function apiWorkspaceEndpoints(app) {
           rerank: workspace?.vectorSearchMode === "rerank",
         });
 
+        const vectorRecords = await DocumentVectors.forVectorIds(
+          results.sources.map(({ id }) => id)
+        );
+        const positionsByVectorId = new Map();
+        for (const record of vectorRecords) {
+          const existing = positionsByVectorId.get(record.vectorId);
+          if (!existing || buildChunkPosition(record).available)
+            positionsByVectorId.set(record.vectorId, record);
+        }
+
         response.status(200).json({
           results: results.sources.map((source) => ({
             id: source.id,
@@ -1021,6 +1078,177 @@ function apiWorkspaceEndpoints(app) {
             },
             distance: source._distance,
             score: source.score,
+            position: buildChunkPosition(
+              positionsByVectorId.get(source.id) || null
+            ),
+          })),
+        });
+      } catch (e) {
+        console.error(e.message, e);
+        response.sendStatus(500).end();
+      }
+    }
+  );
+
+  app.get(
+    "/v1/workspace/:slug/chunk/:vectorId/context",
+    [validApiKey],
+    async (request, response) => {
+      /*
+    #swagger.tags = ['Workspaces']
+    #swagger.description = 'Read ordered chunks surrounding a vector search result. The vector must belong to the requested workspace.'
+    #swagger.parameters['slug'] = {
+      in: 'path',
+      description: 'Unique slug of the workspace',
+      required: true,
+      type: 'string'
+    }
+    #swagger.parameters['vectorId'] = {
+      in: 'path',
+      description: 'Vector ID returned by the workspace vector-search endpoint',
+      required: true,
+      type: 'string'
+    }
+    #swagger.parameters['before'] = {
+      in: 'query',
+      description: 'Number of preceding chunks to return (0-10, default 2)',
+      required: false,
+      type: 'integer',
+      minimum: 0,
+      maximum: 10,
+      default: 2
+    }
+    #swagger.parameters['after'] = {
+      in: 'query',
+      description: 'Number of following chunks to return (0-10, default 2)',
+      required: false,
+      type: 'integer',
+      minimum: 0,
+      maximum: 10,
+      default: 2
+    }
+    #swagger.responses[200] = {
+      description: 'Ordered chunk context',
+      content: {
+        "application/json": {
+          schema: {
+            type: 'object',
+            example: {
+              workspace: { name: "My Workspace", slug: "my-workspace" },
+              document: {
+                docId: "e1c14c2e-3842-4b3f-9b77-09d65b85347a",
+                title: "document.txt"
+              },
+              hit: {
+                vectorId: "5a6bee0a-306c-47fc-942b-8ab9bf3899c4",
+                chunkIndex: 5,
+                chunkNumber: 6,
+                chunkCount: 20
+              },
+              range: { fromIndex: 3, toIndex: 7 },
+              chunks: [
+                {
+                  vectorId: "ad0a330e-37d5-472d-bc81-aae217e24880",
+                  chunkIndex: 3,
+                  chunkNumber: 4,
+                  text: "Preceding document chunk...",
+                  matched: false
+                },
+                {
+                  vectorId: "5a6bee0a-306c-47fc-942b-8ab9bf3899c4",
+                  chunkIndex: 5,
+                  chunkNumber: 6,
+                  text: "Matched document chunk...",
+                  matched: true
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+    #swagger.responses[400] = {
+      description: 'Invalid before or after query parameter'
+    }
+    #swagger.responses[403] = {
+      schema: { "$ref": "#/definitions/InvalidAPIKey" }
+    }
+    #swagger.responses[404] = {
+      description: 'Workspace or vector chunk not found'
+    }
+    #swagger.responses[409] = {
+      description: 'The document must be re-indexed before context can be read',
+      content: {
+        "application/json": {
+          schema: {
+            type: 'object',
+            example: {
+              code: "CHUNK_POSITION_UNAVAILABLE",
+              message: "This document must be re-indexed before chunk context can be read.",
+              reindexRequired: true
+            }
+          }
+        }
+      }
+    }
+    */
+      try {
+        const { slug, vectorId } = request.params;
+        const workspace = await Workspace.get({ slug: String(slug) });
+        if (!workspace)
+          return response.status(404).json({
+            code: "WORKSPACE_NOT_FOUND",
+            message: `Workspace ${slug} was not found.`,
+          });
+
+        const before = parseChunkContextSize(request.query?.before);
+        const after = parseChunkContextSize(request.query?.after);
+        if (before === null || after === null)
+          return response.status(400).json({
+            code: "INVALID_CHUNK_CONTEXT_RANGE",
+            message: `before and after must be non-negative integers no greater than ${MAX_CHUNK_CONTEXT_SIZE}.`,
+          });
+
+        const context = await DocumentVectors.contextByVectorId({
+          vectorId: String(vectorId),
+          workspaceId: workspace.id,
+          before,
+          after,
+        });
+        if (!context.found)
+          return response.status(404).json({
+            code: "CHUNK_NOT_FOUND",
+            message: "The vector chunk was not found in this workspace.",
+          });
+
+        if (context.reindexRequired)
+          return response.status(409).json({
+            code: "CHUNK_POSITION_UNAVAILABLE",
+            message:
+              "This document must be re-indexed before chunk context can be read.",
+            reindexRequired: true,
+          });
+
+        const documentMetadata = safeJsonParse(context.document.metadata, {});
+        return response.status(200).json({
+          workspace: { name: workspace.name, slug: workspace.slug },
+          document: {
+            docId: context.document.docId,
+            title: documentMetadata?.title || context.document.filename,
+          },
+          hit: {
+            vectorId: context.hit.vectorId,
+            chunkIndex: context.hit.chunkIndex,
+            chunkNumber: context.hit.chunkIndex + 1,
+            chunkCount: context.hit.chunkCount,
+          },
+          range: context.range,
+          chunks: context.chunks.map((chunk) => ({
+            vectorId: chunk.vectorId,
+            chunkIndex: chunk.chunkIndex,
+            chunkNumber: chunk.chunkIndex + 1,
+            text: chunk.chunkText,
+            matched: chunk.vectorId === context.hit.vectorId,
           })),
         });
       } catch (e) {
@@ -1031,4 +1259,8 @@ function apiWorkspaceEndpoints(app) {
   );
 }
 
-module.exports = { apiWorkspaceEndpoints };
+module.exports = {
+  apiWorkspaceEndpoints,
+  buildChunkPosition,
+  parseChunkContextSize,
+};

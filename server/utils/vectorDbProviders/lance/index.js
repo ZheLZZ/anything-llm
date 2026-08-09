@@ -321,14 +321,19 @@ class LanceDb extends VectorDatabase {
           const { chunks } = cacheResult;
           const documentVectors = [];
           const submissions = [];
+          const cachedChunks = chunks.flat();
 
-          for (const chunk of chunks) {
-            chunk.forEach((chunk) => {
-              const id = uuidv4();
-              const { id: _id, ...metadata } = chunk.metadata;
-              documentVectors.push({ docId, vectorId: id });
-              submissions.push({ id: id, vector: chunk.values, ...metadata });
+          for (const [i, chunk] of cachedChunks.entries()) {
+            const id = uuidv4();
+            const { id: _id, ...metadata } = chunk.metadata;
+            documentVectors.push({
+              docId,
+              vectorId: id,
+              chunkIndex: i,
+              chunkCount: cachedChunks.length,
+              chunkText: metadata.text,
             });
+            submissions.push({ id: id, vector: chunk.values, ...metadata });
           }
 
           await this.updateOrCreateCollection(client, submissions, namespace);
@@ -381,7 +386,13 @@ class LanceDb extends VectorDatabase {
             id: vectorRecord.id,
             vector: vectorRecord.values,
           });
-          documentVectors.push({ docId, vectorId: vectorRecord.id });
+          documentVectors.push({
+            docId,
+            vectorId: vectorRecord.id,
+            chunkIndex: i,
+            chunkCount: textChunks.length,
+            chunkText: textChunks[i],
+          });
         }
       } else {
         throw new Error(

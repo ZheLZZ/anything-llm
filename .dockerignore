@@ -3,6 +3,7 @@
 **/server/storage/vector-cache/**
 **/server/storage/*.db
 **/server/storage/lancedb
+**/server/storage/backups/**
 **/collector/hotdir/**
 **/collector/outputs/**
 **/node_modules/

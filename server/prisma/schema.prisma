@@ -114,8 +114,14 @@ model document_vectors {
   id            Int      @id @default(autoincrement())
   docId         String
   vectorId      String
+  chunkIndex    Int?
+  chunkCount    Int?
+  chunkText     String?
   createdAt     DateTime @default(now())
   lastUpdatedAt DateTime @default(now())
+
+  @@index([vectorId])
+  @@index([docId, chunkIndex])
 }
 
 model workspaces {
