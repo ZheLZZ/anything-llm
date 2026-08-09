@@ -563,12 +563,19 @@ class PGVector extends VectorDatabase {
           const { chunks } = cacheResult;
           const documentVectors = [];
           const submissions = [];
+          const cachedChunks = chunks.flat();
 
-          for (const chunk of chunks.flat()) {
+          for (const [i, chunk] of cachedChunks.entries()) {
             if (!vectorDimensions) vectorDimensions = chunk.values.length;
             const id = uuidv4();
             const { id: _id, ...metadata } = chunk.metadata;
-            documentVectors.push({ docId, vectorId: id });
+            documentVectors.push({
+              docId,
+              vectorId: id,
+              chunkIndex: i,
+              chunkCount: cachedChunks.length,
+              chunkText: metadata.text,
+            });
             submissions.push({ id: id, vector: chunk.values, metadata });
           }
 
@@ -627,7 +634,13 @@ class PGVector extends VectorDatabase {
             vector: vectorRecord.values,
             metadata: vectorRecord.metadata,
           });
-          documentVectors.push({ docId, vectorId: vectorRecord.id });
+          documentVectors.push({
+            docId,
+            vectorId: vectorRecord.id,
+            chunkIndex: i,
+            chunkCount: textChunks.length,
+            chunkText: textChunks[i],
+          });
         }
       } else {
         throw new Error(

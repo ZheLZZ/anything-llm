@@ -223,6 +223,8 @@ class Chroma extends VectorDatabase {
           });
           const { chunks } = cacheResult;
           const documentVectors = [];
+          const cachedChunks = chunks.flat();
+          let chunkIndex = 0;
 
           for (const chunk of chunks) {
             const submission = {
@@ -235,9 +237,16 @@ class Chroma extends VectorDatabase {
             // Before sending to Chroma and saving the records to our db
             // we need to assign the id of each chunk that is stored in the cached file.
             chunk.forEach((chunk) => {
+              const currentChunkIndex = chunkIndex++;
               const id = uuidv4();
               const { id: _id, ...metadata } = chunk.metadata;
-              documentVectors.push({ docId, vectorId: id });
+              documentVectors.push({
+                docId,
+                vectorId: id,
+                chunkIndex: currentChunkIndex,
+                chunkCount: cachedChunks.length,
+                chunkText: metadata.text,
+              });
               submission.ids.push(id);
               submission.embeddings.push(chunk.values);
               submission.metadatas.push(metadata);
@@ -301,7 +310,13 @@ class Chroma extends VectorDatabase {
           submission.documents.push(textChunks[i]);
 
           vectors.push(vectorRecord);
-          documentVectors.push({ docId, vectorId: vectorRecord.id });
+          documentVectors.push({
+            docId,
+            vectorId: vectorRecord.id,
+            chunkIndex: i,
+            chunkCount: textChunks.length,
+            chunkText: textChunks[i],
+          });
         }
       } else {
         throw new Error(

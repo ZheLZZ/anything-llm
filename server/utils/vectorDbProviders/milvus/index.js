@@ -172,6 +172,8 @@ class Milvus extends VectorDatabase {
           const { client } = await this.connect();
           const { chunks } = cacheResult;
           const documentVectors = [];
+          const cachedChunks = chunks.flat();
+          let chunkIndex = 0;
           vectorDimension = chunks[0][0].values.length || null;
 
           await this.getOrCreateCollection(client, namespace, vectorDimension);
@@ -180,8 +182,15 @@ class Milvus extends VectorDatabase {
               // Before sending to Milvus and saving the records to our db
               // we need to assign the id of each chunk that is stored in the cached file.
               const newChunks = chunk.map((chunk) => {
+                const currentChunkIndex = chunkIndex++;
                 const id = uuidv4();
-                documentVectors.push({ docId, vectorId: id });
+                documentVectors.push({
+                  docId,
+                  vectorId: id,
+                  chunkIndex: currentChunkIndex,
+                  chunkCount: cachedChunks.length,
+                  chunkText: chunk.metadata?.text,
+                });
                 return { id, vector: chunk.values, metadata: chunk.metadata };
               });
               const insertResult = await client.insert({
@@ -244,7 +253,13 @@ class Milvus extends VectorDatabase {
           };
 
           vectors.push(vectorRecord);
-          documentVectors.push({ docId, vectorId: vectorRecord.id });
+          documentVectors.push({
+            docId,
+            vectorId: vectorRecord.id,
+            chunkIndex: i,
+            chunkCount: textChunks.length,
+            chunkText: textChunks[i],
+          });
         }
       } else {
         throw new Error(

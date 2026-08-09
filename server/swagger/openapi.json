@@ -2591,7 +2591,14 @@
                           "tokenCount": 9
                         },
                         "distance": 0.541887640953064,
-                        "score": 0.45811235904693604
+                        "score": 0.45811235904693604,
+                        "position": {
+                          "available": true,
+                          "docId": "e1c14c2e-3842-4b3f-9b77-09d65b85347a",
+                          "chunkIndex": 5,
+                          "chunkNumber": 6,
+                          "chunkCount": 20
+                        }
                       }
                     ]
                   }
@@ -2620,6 +2627,145 @@
                 "scoreThreshold": 0.75
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/workspace/{slug}/chunk/{vectorId}/context": {
+      "get": {
+        "tags": [
+          "Workspaces"
+        ],
+        "description": "Read ordered chunks surrounding a vector search result. The vector must belong to the requested workspace.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Unique slug of the workspace"
+          },
+          {
+            "name": "vectorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Vector ID returned by the workspace vector-search endpoint"
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Number of preceding chunks to return (0-10, default 2)",
+            "required": false,
+            "minimum": 0,
+            "maximum": 10,
+            "default": 2,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Number of following chunks to return (0-10, default 2)",
+            "required": false,
+            "minimum": 0,
+            "maximum": 10,
+            "default": 2,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ordered chunk context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "example": {
+                    "workspace": {
+                      "name": "My Workspace",
+                      "slug": "my-workspace"
+                    },
+                    "document": {
+                      "docId": "e1c14c2e-3842-4b3f-9b77-09d65b85347a",
+                      "title": "document.txt"
+                    },
+                    "hit": {
+                      "vectorId": "5a6bee0a-306c-47fc-942b-8ab9bf3899c4",
+                      "chunkIndex": 5,
+                      "chunkNumber": 6,
+                      "chunkCount": 20
+                    },
+                    "range": {
+                      "fromIndex": 3,
+                      "toIndex": 7
+                    },
+                    "chunks": [
+                      {
+                        "vectorId": "ad0a330e-37d5-472d-bc81-aae217e24880",
+                        "chunkIndex": 3,
+                        "chunkNumber": 4,
+                        "text": "Preceding document chunk...",
+                        "matched": false
+                      },
+                      {
+                        "vectorId": "5a6bee0a-306c-47fc-942b-8ab9bf3899c4",
+                        "chunkIndex": 5,
+                        "chunkNumber": 6,
+                        "text": "Matched document chunk...",
+                        "matched": true
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid before or after query parameter"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidAPIKey"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidAPIKey"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace or vector chunk not found"
+          },
+          "409": {
+            "description": "The document must be re-indexed before context can be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "example": {
+                    "code": "CHUNK_POSITION_UNAVAILABLE",
+                    "message": "This document must be re-indexed before chunk context can be read.",
+                    "reindexRequired": true
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
           }
         }
       }

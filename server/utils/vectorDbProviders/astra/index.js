@@ -173,6 +173,8 @@ class AstraDB extends VectorDatabase {
           const { client } = await this.connect();
           const { chunks } = cacheResult;
           const documentVectors = [];
+          const cachedChunks = chunks.flat();
+          let chunkIndex = 0;
           vectorDimension = chunks[0][0].values.length || null;
 
           const collection = await this.getOrCreateCollection(
@@ -189,8 +191,15 @@ class AstraDB extends VectorDatabase {
             // Before sending to Astra and saving the records to our db
             // we need to assign the id of each chunk that is stored in the cached file.
             const newChunks = chunk.map((chunk) => {
+              const currentChunkIndex = chunkIndex++;
               const _id = uuidv4();
-              documentVectors.push({ docId, vectorId: _id });
+              documentVectors.push({
+                docId,
+                vectorId: _id,
+                chunkIndex: currentChunkIndex,
+                chunkCount: cachedChunks.length,
+                chunkText: chunk.metadata?.text,
+              });
               return {
                 _id: _id,
                 $vector: chunk.values,
@@ -240,7 +249,13 @@ class AstraDB extends VectorDatabase {
           };
 
           vectors.push(vectorRecord);
-          documentVectors.push({ docId, vectorId: vectorRecord._id });
+          documentVectors.push({
+            docId,
+            vectorId: vectorRecord._id,
+            chunkIndex: i,
+            chunkCount: textChunks.length,
+            chunkText: textChunks[i],
+          });
         }
       } else {
         throw new Error(

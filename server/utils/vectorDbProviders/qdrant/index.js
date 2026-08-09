@@ -171,6 +171,8 @@ class QDrant extends VectorDatabase {
           const { client } = await this.connect();
           const { chunks } = cacheResult;
           const documentVectors = [];
+          const cachedChunks = chunks.flat();
+          let chunkIndex = 0;
           vectorDimension =
             chunks[0][0]?.vector?.length ??
             chunks[0][0]?.values?.length ??
@@ -197,10 +199,17 @@ class QDrant extends VectorDatabase {
             // we need to assign the id of each chunk that is stored in the cached file.
             // The id property must be defined or else it will be unable to be managed by ALLM.
             chunk.forEach((chunk) => {
+              const currentChunkIndex = chunkIndex++;
               const id = uuidv4();
               if (chunk?.payload?.hasOwnProperty("id")) {
                 const { id: _id, ...payload } = chunk.payload;
-                documentVectors.push({ docId, vectorId: id });
+                documentVectors.push({
+                  docId,
+                  vectorId: id,
+                  chunkIndex: currentChunkIndex,
+                  chunkCount: cachedChunks.length,
+                  chunkText: payload.text,
+                });
                 submission.ids.push(id);
                 submission.vectors.push(chunk.vector);
                 submission.payloads.push(payload);
@@ -272,7 +281,13 @@ class QDrant extends VectorDatabase {
           submission.payloads.push(vectorRecord.payload);
 
           vectors.push(vectorRecord);
-          documentVectors.push({ docId, vectorId: vectorRecord.id });
+          documentVectors.push({
+            docId,
+            vectorId: vectorRecord.id,
+            chunkIndex: i,
+            chunkCount: textChunks.length,
+            chunkText: textChunks[i],
+          });
         }
       } else {
         throw new Error(
