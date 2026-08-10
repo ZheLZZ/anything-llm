@@ -9,7 +9,7 @@ const {
   setConnectionMeta,
 } = require("../../utils/middleware/embedMiddleware");
 const {
-  convertToChatHistory,
+  convertToChatHistoryWithSourceAliases,
   writeResponseChunk,
 } = require("../../utils/helpers/chat/responses");
 
@@ -81,7 +81,9 @@ function embeddedEndpoints(app) {
           true
         );
 
-        response.status(200).json({ history: convertToChatHistory(history) });
+        response.status(200).json({
+          history: await convertToChatHistoryWithSourceAliases(history),
+        });
       } catch (e) {
         console.error(e.message, e);
         response.sendStatus(500).end();

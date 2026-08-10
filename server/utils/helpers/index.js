@@ -84,45 +84,75 @@
  * @param {('pinecone' | 'chroma' | 'chromacloud' | 'lancedb' | 'weaviate' | 'qdrant' | 'milvus' | 'zilliz' | 'astra') | null} getExactly - If provided, this will return an explit provider.
  * @returns { BaseVectorDatabaseProvider}
  */
+function withLibrarySourceAliases(vectorDb) {
+  if (
+    !vectorDb ||
+    vectorDb.__librarySourceAliasesAttached ||
+    typeof vectorDb.performSimilaritySearch !== "function"
+  )
+    return vectorDb;
+
+  const performSimilaritySearch =
+    vectorDb.performSimilaritySearch.bind(vectorDb);
+  vectorDb.performSimilaritySearch = async (...args) => {
+    const result = await performSimilaritySearch(...args);
+    if (!result?.sources?.length) return result;
+    try {
+      const { LibraryDocuments } = require("../../models/libraryDocuments");
+      return {
+        ...result,
+        sources: await LibraryDocuments.enrichSources(result.sources),
+      };
+    } catch (error) {
+      console.error(
+        `Source display-name enrichment failed (${error.code || "UNKNOWN"}).`
+      );
+      return result;
+    }
+  };
+  vectorDb.__librarySourceAliasesAttached = true;
+  return vectorDb;
+}
+
 function getVectorDbClass(getExactly = null) {
   const vectorSelection = getExactly ?? process.env.VECTOR_DB ?? "lancedb";
   switch (vectorSelection) {
     case "pinecone":
       const { Pinecone } = require("../vectorDbProviders/pinecone");
-      return new Pinecone();
+      return withLibrarySourceAliases(new Pinecone());
     case "chroma":
       const { Chroma } = require("../vectorDbProviders/chroma");
-      return new Chroma();
+      return withLibrarySourceAliases(new Chroma());
     case "chromacloud":
       const { ChromaCloud } = require("../vectorDbProviders/chromacloud");
-      return new ChromaCloud();
+      return withLibrarySourceAliases(new ChromaCloud());
     case "lancedb":
       const { LanceDb } = require("../vectorDbProviders/lance");
-      return new LanceDb();
+      return withLibrarySourceAliases(new LanceDb());
     case "weaviate":
       const { Weaviate } = require("../vectorDbProviders/weaviate");
-      return new Weaviate();
+      return withLibrarySourceAliases(new Weaviate());
     case "qdrant":
       const { QDrant } = require("../vectorDbProviders/qdrant");
-      return new QDrant();
+      return withLibrarySourceAliases(new QDrant());
     case "milvus":
       const { Milvus } = require("../vectorDbProviders/milvus");
-      return new Milvus();
+      return withLibrarySourceAliases(new Milvus());
     case "zilliz":
       const { Zilliz } = require("../vectorDbProviders/zilliz");
-      return new Zilliz();
+      return withLibrarySourceAliases(new Zilliz());
     case "astra":
       const { AstraDB } = require("../vectorDbProviders/astra");
-      return new AstraDB();
+      return withLibrarySourceAliases(new AstraDB());
     case "pgvector":
       const { PGVector } = require("../vectorDbProviders/pgvector");
-      return new PGVector();
+      return withLibrarySourceAliases(new PGVector());
     default:
       console.error(
         `\x1b[31m[ENV ERROR]\x1b[0m No VECTOR_DB value found in environment! Falling back to LanceDB`
       );
       const { LanceDb: DefaultLanceDb } = require("../vectorDbProviders/lance");
-      return new DefaultLanceDb();
+      return withLibrarySourceAliases(new DefaultLanceDb());
   }
 }
 

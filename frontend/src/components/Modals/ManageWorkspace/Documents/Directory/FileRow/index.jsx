@@ -5,16 +5,28 @@ import {
   middleTruncate,
 } from "@/utils/directories";
 import { File } from "@phosphor-icons/react";
+import DocumentActions from "../../DocumentActions";
+import {
+  documentRowMetadataIsEqual,
+  getDocumentEffectiveName,
+} from "@/utils/documentLibrary";
 
-function FileRow({ item, selected, folderName, toggleSelection }) {
+function FileRow({
+  item,
+  selected,
+  folderName,
+  toggleSelection,
+  onDocumentUpdated,
+}) {
+  const effectiveName = getDocumentEffectiveName(item);
   const tooltipContent = useMemo(
     () =>
       JSON.stringify({
-        title: item.title,
+        title: effectiveName,
         date: formatDateTimeAsMoment(item?.published),
         extension: getFileExtension(item.url),
       }),
-    [item.title, item.published, item.url]
+    [effectiveName, item.published, item.url]
   );
 
   return (
@@ -44,7 +56,7 @@ function FileRow({ item, selected, folderName, toggleSelection }) {
           weight="fill"
         />
         <p className="whitespace-nowrap overflow-hidden text-ellipsis max-w-[400px]">
-          {middleTruncate(item.title, 55)}
+          {middleTruncate(effectiveName, 55)}
         </p>
       </div>
       <div className="col-span-2 flex justify-end items-center">
@@ -53,11 +65,16 @@ function FileRow({ item, selected, folderName, toggleSelection }) {
             <p className="text-xs px-2 py-0.5">Cached</p>
           </div>
         )}
+        <DocumentActions item={item} onUpdated={onDocumentUpdated} />
       </div>
     </tr>
   );
 }
 
 export default memo(FileRow, (prev, next) => {
-  return prev.item.id === next.item.id && prev.selected === next.selected;
+  return (
+    prev.item.id === next.item.id &&
+    prev.selected === next.selected &&
+    documentRowMetadataIsEqual(prev.item, next.item)
+  );
 });

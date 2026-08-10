@@ -4,6 +4,7 @@
 **/server/storage/*.db
 **/server/storage/lancedb
 **/server/storage/backups/**
+**/server/storage/original-documents/**
 **/collector/hotdir/**
 **/collector/outputs/**
 **/node_modules/

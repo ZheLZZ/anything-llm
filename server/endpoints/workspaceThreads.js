@@ -17,7 +17,9 @@ const {
   validWorkspaceAndThreadSlug,
 } = require("../utils/middleware/validWorkspace");
 const { WorkspaceChats } = require("../models/workspaceChats");
-const { convertToChatHistory } = require("../utils/helpers/chat/responses");
+const {
+  convertToChatHistoryWithSourceAliases,
+} = require("../utils/helpers/chat/responses");
 const { getModelTag } = require("./utils");
 
 function workspaceThreadEndpoints(app) {
@@ -156,7 +158,9 @@ function workspaceThreadEndpoints(app) {
           { id: "asc" }
         );
 
-        response.status(200).json({ history: convertToChatHistory(history) });
+        response.status(200).json({
+          history: await convertToChatHistoryWithSourceAliases(history),
+        });
       } catch (e) {
         console.error(e.message, e);
         response.sendStatus(500).end();

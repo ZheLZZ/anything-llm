@@ -34,8 +34,13 @@ function FileUploadProgressComponent({
       // folderName/metadata MUST be appended before the file part - multer
       // only populates request.body with text fields it saw before the file,
       // so reordering these silently breaks folder uploads server-side.
+      formData.append("originalFilename", file.name);
       if (!!folderName && !!relativePath) {
         formData.append("folderName", folderName);
+        formData.append(
+          "originalRelativePath",
+          `${folderName}/${relativePath}`
+        );
         formData.append(
           "metadata",
           JSON.stringify({ title: relativePath, docSource: relativePath })

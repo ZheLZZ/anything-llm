@@ -41,6 +41,7 @@ export default function FolderRow({
   onToggleFile,
   onPrefetch,
   onLoadMore,
+  onDocumentUpdated,
   acceptsDrops = false,
   onDropFiles,
 }) {
@@ -173,6 +174,7 @@ export default function FolderRow({
             selected={isFileSelected(file.id)}
             folderName={item.name}
             toggleSelection={onToggleFile}
+            onDocumentUpdated={onDocumentUpdated}
           />
         ))}
       {expanded && hasMore && (

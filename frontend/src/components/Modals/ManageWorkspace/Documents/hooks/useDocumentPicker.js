@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import System from "@/models/system";
 import Workspace from "@/models/workspace";
+import { updateDocumentMetadataCollections } from "@/utils/documentLibrary";
 
 /** How many files we pull per page when a folder is expanded. */
 export const PAGE_SIZE = 100;
@@ -338,6 +339,10 @@ function reducer(state, action) {
     case "search-clear":
       return { ...state, searching: false, searchResults: null };
 
+    case "update-document-metadata": {
+      return updateDocumentMetadataCollections(state, action.document);
+    }
+
     default:
       return state;
   }
@@ -598,6 +603,10 @@ export default function useDocumentPicker({ slug }) {
     (message) => dispatch({ type: "busy", message }),
     []
   );
+  const updateDocumentMetadata = useCallback(
+    (document) => dispatch({ type: "update-document-metadata", document }),
+    []
+  );
 
   // Monotonic id for search requests. A slow query must not overwrite the
   // results of one issued after it, and clearing the box must not be undone
@@ -699,6 +708,7 @@ export default function useDocumentPicker({ slug }) {
     removeFiles,
     addFolder,
     setBusy,
+    updateDocumentMetadata,
   };
 }
 

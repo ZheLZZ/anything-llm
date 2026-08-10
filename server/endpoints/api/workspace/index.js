@@ -17,7 +17,7 @@ const { validApiKey } = require("../../../utils/middleware/validApiKey");
 const { VALID_CHAT_MODE } = require("../../../utils/chats/stream");
 const { EventLogs } = require("../../../models/eventLogs");
 const {
-  convertToChatHistory,
+  convertToChatHistoryWithSourceAliases,
   writeResponseChunk,
 } = require("../../../utils/helpers/chat/responses");
 const { ApiChatHandler } = require("../../../utils/chats/apiChatHandler");
@@ -486,7 +486,9 @@ function apiWorkspaceEndpoints(app) {
           : await WorkspaceChats.forWorkspace(workspace.id, validLimit, {
               createdAt: validOrderBy,
             });
-        response.status(200).json({ history: convertToChatHistory(history) });
+        response.status(200).json({
+          history: await convertToChatHistoryWithSourceAliases(history),
+        });
       } catch (e) {
         console.error(e.message, e);
         response.sendStatus(500).end();

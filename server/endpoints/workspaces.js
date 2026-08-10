@@ -4,7 +4,6 @@ const {
   userFromSession,
   safeJsonParse,
 } = require("../utils/http");
-const { moveProcessedDocsToFolder } = require("../utils/files");
 const { Workspace } = require("../models/workspace");
 const { Document } = require("../models/documents");
 const { DocumentVectors } = require("../models/vectors");
@@ -22,11 +21,18 @@ const {
   WorkspaceSuggestedMessages,
 } = require("../models/workspacesSuggestedMessages");
 const { validWorkspaceSlug } = require("../utils/middleware/validWorkspace");
-const { convertToChatHistory } = require("../utils/helpers/chat/responses");
+const {
+  convertToChatHistoryWithSourceAliases,
+} = require("../utils/helpers/chat/responses");
 const { CollectorApi } = require("../utils/collectorApi");
 const { getTTSProvider } = require("../utils/TextToSpeech");
 const { getAudioFileInfo } = require("../utils/TextToSpeech/audioFormat");
 const { WorkspaceThread } = require("../models/workspaceThread");
+const {
+  processUploadedLibraryDocument,
+  registerSourceDocumentsSafely,
+  rollbackUploadedDocuments,
+} = require("../utils/files/libraryDocumentUpload");
 
 const truncate = require("truncate");
 const { purgeDocument } = require("../utils/files/purgeDocument");
@@ -122,8 +128,8 @@ function workspaceEndpoints(app) {
         // Multipart field order matters: multer only exposes text fields on
         // request.body that were appended BEFORE the file part, so the client
         // must append folderName/metadata first. See FileUploadProgress.
-        const { folderName = null, metadata: _metadata = "{}" } =
-          reqBody(request);
+        const uploadBody = reqBody(request);
+        const { folderName = null, metadata: _metadata = "{}" } = uploadBody;
 
         const metadata =
           typeof _metadata === "string"
@@ -133,6 +139,7 @@ function workspaceEndpoints(app) {
         const processingOnline = await Collector.online();
 
         if (!processingOnline) {
+          await rollbackUploadedDocuments({ file: request.file });
           response
             .status(500)
             .json({
@@ -143,18 +150,17 @@ function workspaceEndpoints(app) {
           return;
         }
 
-        const { success, reason, documents } = await Collector.processDocument(
-          originalname,
-          metadata
-        );
+        const { success, reason } = await processUploadedLibraryDocument({
+          collector: Collector,
+          file: request.file,
+          body: uploadBody,
+          metadata,
+          folderName,
+        });
         if (!success) {
           response.status(500).json({ success: false, error: reason }).end();
           return;
         }
-
-        // When the upload is part of a folder upload, move the processed
-        // documents from their default location into the target folder.
-        if (!!folderName) moveProcessedDocsToFolder(documents, folderName);
 
         Collector.log(
           `Document ${originalname} uploaded processed and successfully. It is now available in documents.`
@@ -196,11 +202,13 @@ function workspaceEndpoints(app) {
           return;
         }
 
-        const { success, reason } = await Collector.processLink(link);
+        const { success, reason, documents } =
+          await Collector.processLink(link);
         if (!success) {
           response.status(500).json({ success: false, error: reason }).end();
           return;
         }
+        await registerSourceDocumentsSafely(documents, "link");
 
         Collector.log(
           `Link ${link} uploaded processed and successfully. It is now available in documents.`
@@ -429,7 +437,9 @@ function workspaceEndpoints(app) {
         const history = multiUserMode(response)
           ? await WorkspaceChats.forWorkspaceByUser(workspace.id, user.id)
           : await WorkspaceChats.forWorkspace(workspace.id);
-        response.status(200).json({ history: convertToChatHistory(history) });
+        response.status(200).json({
+          history: await convertToChatHistoryWithSourceAliases(history),
+        });
       } catch (e) {
         console.error(e.message, e);
         response.sendStatus(500).end();
@@ -805,6 +815,7 @@ function workspaceEndpoints(app) {
         const processingOnline = await Collector.online();
 
         if (!processingOnline) {
+          await rollbackUploadedDocuments({ file: request.file });
           response
             .status(500)
             .json({
@@ -816,7 +827,11 @@ function workspaceEndpoints(app) {
         }
 
         const { success, reason, documents } =
-          await Collector.processDocument(originalname);
+          await processUploadedLibraryDocument({
+            collector: Collector,
+            file: request.file,
+            body: reqBody(request),
+          });
         if (!success || documents?.length === 0) {
           response.status(500).json({ success: false, error: reason }).end();
           return;

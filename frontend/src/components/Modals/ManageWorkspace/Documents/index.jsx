@@ -20,8 +20,24 @@ export default function DocumentSettings({ workspace }) {
     removeFiles,
     clearSelection,
     workspaceDocs: embeddedDocs,
+    updateDocumentMetadata,
   } = picker;
   const hasChanges = movedItems.length > 0;
+
+  const handleDocumentUpdated = useCallback(
+    (document) => {
+      updateDocumentMetadata(document);
+      setMovedItems((items) =>
+        items.map((item) =>
+          item.libraryDocumentId === document.libraryDocumentId ||
+          (!item.libraryDocumentId && item.id === document.id)
+            ? { ...item, ...document }
+            : item
+        )
+      );
+    },
+    [updateDocumentMetadata]
+  );
 
   const { embeddingProgress, startEmbedding } = useWorkspaceEmbeddingProgress(
     workspace.slug,
@@ -105,6 +121,7 @@ export default function DocumentSettings({ workspace }) {
         hiddenPaths={hiddenPaths}
         setHighlightWorkspace={setHighlightWorkspace}
         moveToWorkspace={moveSelectedItemsToWorkspace}
+        onDocumentUpdated={handleDocumentUpdated}
       />
       <div className="upload-modal-arrow">
         <ArrowsDownUp className="text-white text-base font-bold rotate-90 w-11 h-11" />
@@ -121,6 +138,7 @@ export default function DocumentSettings({ workspace }) {
         hasChanges={hasChanges}
         saveChanges={updateWorkspace}
         movedItems={movedItems}
+        onDocumentUpdated={handleDocumentUpdated}
       />
     </div>
   );

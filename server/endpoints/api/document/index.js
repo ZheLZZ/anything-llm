@@ -6,7 +6,6 @@ const {
   getDocumentsByFolder,
   normalizePath,
   isWithin,
-  moveProcessedDocsToFolder,
   viewLocalFiles,
 } = require("../../../utils/files");
 const { reqBody, safeJsonParse, queryParams } = require("../../../utils/http");
@@ -17,6 +16,16 @@ const path = require("path");
 const { Document } = require("../../../models/documents");
 const { purgeFolder } = require("../../../utils/files/purgeDocument");
 const createFilesLib = require("../../../utils/agents/aibitat/plugins/create-files/lib");
+const { LibraryDocuments } = require("../../../models/libraryDocuments");
+const {
+  processUploadedLibraryDocument,
+  registerSourceDocumentsSafely,
+  rollbackUploadedDocuments,
+} = require("../../../utils/files/libraryDocumentUpload");
+const {
+  moveLibraryDocument,
+} = require("../../../utils/files/moveLibraryDocument");
+const { sendOriginalDocument } = require("../../document");
 const documentsPath =
   process.env.NODE_ENV === "development"
     ? path.resolve(__dirname, "../../../storage/documents")
@@ -120,8 +129,8 @@ function apiDocumentEndpoints(app) {
       try {
         const Collector = new CollectorApi();
         const { originalname } = request.file;
-        const { addToWorkspaces = "", metadata: _metadata = {} } =
-          reqBody(request);
+        const uploadBody = reqBody(request);
+        const { addToWorkspaces = "", metadata: _metadata = {} } = uploadBody;
         const metadata =
           typeof _metadata === "string"
             ? safeJsonParse(_metadata, {})
@@ -129,6 +138,7 @@ function apiDocumentEndpoints(app) {
         const processingOnline = await Collector.online();
 
         if (!processingOnline) {
+          await rollbackUploadedDocuments({ file: request.file });
           response
             .status(500)
             .json({
@@ -139,10 +149,13 @@ function apiDocumentEndpoints(app) {
           return;
         }
 
-        const { success, reason, documents } = await Collector.processDocument(
-          originalname,
-          metadata
-        );
+        const { success, reason, documents } =
+          await processUploadedLibraryDocument({
+            collector: Collector,
+            file: request.file,
+            body: uploadBody,
+            metadata,
+          });
 
         if (!success) {
           return response
@@ -262,8 +275,8 @@ function apiDocumentEndpoints(app) {
       */
       try {
         const { originalname } = request.file;
-        const { addToWorkspaces = "", metadata: _metadata = {} } =
-          reqBody(request);
+        const uploadBody = reqBody(request);
+        const { addToWorkspaces = "", metadata: _metadata = {} } = uploadBody;
         const metadata =
           typeof _metadata === "string"
             ? safeJsonParse(_metadata, {})
@@ -273,6 +286,7 @@ function apiDocumentEndpoints(app) {
         const Collector = new CollectorApi();
         const processingOnline = await Collector.online();
         if (!processingOnline) {
+          await rollbackUploadedDocuments({ file: request.file });
           return response
             .status(500)
             .json({
@@ -282,11 +296,14 @@ function apiDocumentEndpoints(app) {
             .end();
         }
 
-        // Process the uploaded document with metadata
-        const { success, reason, documents } = await Collector.processDocument(
-          originalname,
-          metadata
-        );
+        const { success, reason, documents } =
+          await processUploadedLibraryDocument({
+            collector: Collector,
+            file: request.file,
+            body: uploadBody,
+            metadata,
+            folderName,
+          });
         if (!success) {
           return response
             .status(500)
@@ -294,9 +311,7 @@ function apiDocumentEndpoints(app) {
             .end();
         }
 
-        // For each processed document, check if it is already in the desired folder.
-        // If not, move it using similar logic as in the move-files endpoint.
-        const folder = moveProcessedDocsToFolder(documents, folderName);
+        const folder = folderName;
 
         Collector.log(
           `Document ${originalname} uploaded, processed, and moved to folder ${folder} successfully.`
@@ -423,6 +438,10 @@ function apiDocumentEndpoints(app) {
             .json({ success: false, error: reason, documents })
             .end();
         }
+        const publicDocuments = await registerSourceDocumentsSafely(
+          documents,
+          "link"
+        );
 
         Collector.log(
           `Link ${link} uploaded processed and successfully. It is now available in documents.`
@@ -437,7 +456,9 @@ function apiDocumentEndpoints(app) {
             addToWorkspaces,
             documents?.[0].location
           );
-        response.status(200).json({ success: true, error: null, documents });
+        response
+          .status(200)
+          .json({ success: true, error: null, documents: publicDocuments });
       } catch (e) {
         console.error(e.message, e);
         response.sendStatus(500).end();
@@ -569,6 +590,10 @@ function apiDocumentEndpoints(app) {
             .json({ success: false, error: reason, documents })
             .end();
         }
+        const publicDocuments = await registerSourceDocumentsSafely(
+          documents,
+          "raw-text"
+        );
 
         Collector.log(
           `Document created successfully. It is now available in documents.`
@@ -581,7 +606,9 @@ function apiDocumentEndpoints(app) {
             addToWorkspaces,
             documents?.[0].location
           );
-        response.status(200).json({ success: true, error: null, documents });
+        response
+          .status(200)
+          .json({ success: true, error: null, documents: publicDocuments });
       } catch (e) {
         console.error(e.message, e);
         response.sendStatus(500).end();
@@ -837,6 +864,117 @@ function apiDocumentEndpoints(app) {
     }
   );
 
+  app.patch(
+    "/v1/document/:libraryDocumentId/display-name",
+    [validApiKey],
+    async (request, response) => {
+      /*
+      #swagger.tags = ['Documents']
+      #swagger.description = 'Update the display-only name of a library document. This does not reparse, rechunk, re-embed, rename, move, or otherwise modify the processed document or its vectors.'
+      #swagger.parameters['libraryDocumentId'] = {
+        in: 'path',
+        required: true,
+        type: 'string',
+        description: 'Stable library document ID.'
+      }
+      #swagger.requestBody = {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: 'object',
+              required: ['displayName'],
+              properties: { displayName: { type: 'string', maxLength: 255 } }
+            }
+          }
+        }
+      }
+      */
+      try {
+        const { libraryDocumentId } = request.params;
+        const existing = await LibraryDocuments.getById(libraryDocumentId);
+        if (!existing)
+          return response.status(404).json({
+            success: false,
+            code: "LIBRARY_DOCUMENT_NOT_FOUND",
+            message: "Library document not found.",
+          });
+        const updated = await LibraryDocuments.renameDisplayName(
+          libraryDocumentId,
+          reqBody(request).displayName
+        );
+        await EventLogs.logEvent("library_document_display_name_updated", {
+          libraryDocumentId: updated.id,
+          oldDisplayName: existing.displayName,
+          newDisplayName: updated.displayName,
+        });
+        response.status(200).json({
+          success: true,
+          document: await LibraryDocuments.toPublicFields(updated),
+          reindexed: false,
+        });
+      } catch (error) {
+        response
+          .status(error.code === "INVALID_DISPLAY_NAME" ? 422 : 500)
+          .json({
+            success: false,
+            code: error.code || "DISPLAY_NAME_UPDATE_FAILED",
+            message:
+              error.code === "INVALID_DISPLAY_NAME"
+                ? error.message
+                : "Failed to update the display name.",
+          });
+      }
+    }
+  );
+
+  app.get(
+    "/v1/document/:libraryDocumentId/original",
+    [validApiKey],
+    async (request, response) => {
+      /*
+      #swagger.tags = ['Documents']
+      #swagger.description = 'Download the retained original uploaded file for a library document. Historical, web, and raw-text documents may not have an original. The binary response uses the original filename in Content-Disposition.'
+      #swagger.parameters['libraryDocumentId'] = {
+        in: 'path',
+        required: true,
+        type: 'string',
+        description: 'Stable library document ID.'
+      }
+      #swagger.responses[200] = {
+        description: 'Original uploaded file.',
+        content: {
+          "application/octet-stream": {
+            schema: { type: 'string', format: 'binary' }
+          }
+        }
+      }
+      #swagger.responses[404] = {
+        description: 'The document has no retained original or the stored file is missing.'
+      }
+      */
+      try {
+        const document = await LibraryDocuments.getById(
+          request.params.libraryDocumentId
+        );
+        if (!document)
+          return response.status(404).json({
+            success: false,
+            code: "LIBRARY_DOCUMENT_NOT_FOUND",
+            message: "Library document not found.",
+          });
+        return sendOriginalDocument(response, document);
+      } catch {
+        if (response.headersSent) return;
+        response.status(500).json({
+          success: false,
+          code: "ORIGINAL_DOWNLOAD_FAILED",
+          message: "Failed to download the original document.",
+        });
+      }
+    }
+  );
+
   // Be careful and place as last route to prevent override of the other /document/ GET
   // endpoints!
   app.get("/v1/document/:docName", [validApiKey], async (request, response) => {
@@ -1066,53 +1204,44 @@ function apiDocumentEndpoints(app) {
       */
       try {
         const { files } = reqBody(request);
-        const docpaths = files.map(({ from }) => from);
-        const documents = await Document.where({ docpath: { in: docpaths } });
-        const embeddedFiles = documents.map((doc) => doc.docpath);
-        const moveableFiles = files.filter(
-          ({ from }) => !embeddedFiles.includes(from)
-        );
-        const movePromises = moveableFiles.map(({ from, to }) => {
-          const sourcePath = path.join(documentsPath, normalizePath(from));
-          const destinationPath = path.join(documentsPath, normalizePath(to));
-          return new Promise((resolve, reject) => {
-            if (
-              !isWithin(documentsPath, sourcePath) ||
-              !isWithin(documentsPath, destinationPath)
-            )
-              return reject("Invalid file location");
+        const requestedFiles = files.map(({ from, to }) => ({
+          from: LibraryDocuments.canonicalDocpath(from),
+          to: LibraryDocuments.canonicalDocpath(to),
+        }));
+        if (requestedFiles.some(({ from, to }) => !from || !to))
+          throw new Error("Invalid file location.");
 
-            fs.rename(sourcePath, destinationPath, (err) => {
-              if (err) {
-                console.error(`Error moving file ${from} to ${to}:`, err);
-                reject(err);
-              } else {
-                resolve();
-              }
-            });
-          });
+        const docpaths = requestedFiles.map(({ from }) => from);
+        const docpathVariants = [
+          ...new Set(
+            docpaths.flatMap((docpath) => [
+              docpath,
+              docpath.replace(/\//g, "\\"),
+            ])
+          ),
+        ];
+        const documents = await Document.where({
+          docpath: { in: docpathVariants },
         });
-        Promise.all(movePromises)
-          .then(() => {
-            const unmovableCount = files.length - moveableFiles.length;
-            if (unmovableCount > 0) {
-              response.status(200).json({
-                success: true,
-                message: `${unmovableCount}/${files.length} files not moved. Unembed them from all workspaces.`,
-              });
-            } else {
-              response.status(200).json({
-                success: true,
-                message: null,
-              });
-            }
-          })
-          .catch((err) => {
-            console.error("Error moving files:", err);
-            response
-              .status(500)
-              .json({ success: false, message: "Failed to move some files." });
-          });
+        const embeddedFiles = new Set(
+          documents
+            .map((doc) => LibraryDocuments.canonicalDocpath(doc.docpath))
+            .filter(Boolean)
+        );
+        const moveableFiles = requestedFiles.filter(
+          ({ from }) => !embeddedFiles.has(from)
+        );
+        await Promise.all(
+          moveableFiles.map(({ from, to }) => moveLibraryDocument(from, to))
+        );
+        const unmovableCount = files.length - moveableFiles.length;
+        response.status(200).json({
+          success: true,
+          message:
+            unmovableCount > 0
+              ? `${unmovableCount}/${files.length} files not moved. Unembed them from all workspaces.`
+              : null,
+        });
       } catch (e) {
         console.error(e);
         response

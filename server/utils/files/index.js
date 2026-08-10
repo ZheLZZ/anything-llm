@@ -3,6 +3,7 @@ const path = require("path");
 const { spawn } = require("child_process");
 const { v5: uuidv5, v4: uuidv4 } = require("uuid");
 const { Document } = require("../../models/documents");
+const { LibraryDocuments } = require("../../models/libraryDocuments");
 const { DocumentSyncQueue } = require("../../models/documentSyncQueue");
 const documentsPath =
   process.env.NODE_ENV === "development"
@@ -112,7 +113,11 @@ async function viewLocalFiles() {
       const results = await Promise.all(filePromises)
         .then((results) => results.filter((i) => !!i)) // Remove null results
         .then((results) => results.filter((i) => hasRequiredMetadata(i))); // Remove invalid file structures
-      subdocs.items.push(...results);
+      subdocs.items.push(
+        ...(await LibraryDocuments.enrichPublicDocuments(results, {
+          docpaths: results.map((item) => `${file}/${item.name}`),
+        }))
+      );
 
       // Grab the pinned workspaces and watched documents for this folder's documents
       // at the time of the query so we don't have to re-query the database for each file
@@ -218,7 +223,7 @@ async function getDocumentsByFolder(folderName = "", pagination = {}) {
   const paginatedFiles = allJsonFiles.slice(offset, offset + limit);
 
   const liveSyncAvailable = await DocumentSyncQueue.enabled();
-  const documents = (
+  let documents = (
     await Promise.all(
       paginatedFiles.map((file) =>
         fileToPickerData({
@@ -229,6 +234,9 @@ async function getDocumentsByFolder(folderName = "", pagination = {}) {
       )
     )
   ).filter((doc) => !!doc && hasRequiredMetadata(doc));
+  documents = await LibraryDocuments.enrichPublicDocuments(documents, {
+    docpaths: documents.map((document) => `${folderName}/${document.name}`),
+  });
 
   const filenames = {};
   for (const doc of documents)
@@ -346,12 +354,17 @@ async function findDocumentInDocuments(documentName = null) {
     const fileData = fs.readFileSync(targetFileLocation, "utf8");
     const cachefilename = `${folder}/${targetFilename}`;
     const { pageContent: _pageContent, ...metadata } = JSON.parse(fileData);
-    return {
+    const document = {
       name: targetFilename,
       type: "file",
       ...metadata,
       cached: await cachedVectorInformation(cachefilename, true),
     };
+    const [enriched] = await LibraryDocuments.enrichPublicDocuments(
+      [document],
+      { docpaths: [cachefilename] }
+    );
+    return enriched;
   }
 
   return null;
@@ -520,7 +533,9 @@ async function getDocumentsByDocPaths(docpaths = []) {
     item.watched = watchedDocumentsFilenames.hasOwnProperty(item.name) || false;
   }
 
-  return results;
+  return LibraryDocuments.enrichPublicDocuments(results, {
+    docpaths: results.map((item) => item.docpath),
+  });
 }
 
 const SEARCH_MAX_RESULTS = 50;
@@ -626,15 +641,25 @@ async function searchDocuments(searchTerm = "") {
     ({ rgPath } = require("@vscode/ripgrep"));
   } catch {
     console.error("searchDocuments: @vscode/ripgrep unavailable.");
-    return [];
   }
 
-  const [fileHits, contentHits] = await Promise.all([
-    _rgFileSearch(rgPath, term),
-    _rgContentSearch(rgPath, term),
+  const [fileHits, contentHits, displayNameHits] = await Promise.all([
+    rgPath ? _rgFileSearch(rgPath, term) : new Set(),
+    rgPath ? _rgContentSearch(rgPath, term) : new Set(),
+    LibraryDocuments.searchByDisplayName(term, SEARCH_MAX_RESULTS).catch(
+      () => []
+    ),
   ]);
+  const displayNamePaths = displayNameHits.flatMap((record) => {
+    const docpath = LibraryDocuments.canonicalDocpath(record.docpath);
+    if (!docpath) return [];
+    const target = path.resolve(documentsPath, docpath);
+    return isWithin(documentsPath, target) && fs.existsSync(target)
+      ? [target]
+      : [];
+  });
 
-  const hits = [...new Set([...fileHits, ...contentHits])]
+  const hits = [...new Set([...displayNamePaths, ...fileHits, ...contentHits])]
     .sort()
     .slice(0, SEARCH_MAX_RESULTS);
   if (hits.length === 0) return [];
@@ -657,7 +682,7 @@ async function searchDocuments(searchTerm = "") {
   const results = [];
   for (const [folder, paths] of byFolder) {
     const filenames = {};
-    const items = (
+    let items = (
       await Promise.all(
         paths.map((absPath) =>
           fileToPickerData({
@@ -669,6 +694,9 @@ async function searchDocuments(searchTerm = "") {
       )
     ).filter((doc) => !!doc && hasRequiredMetadata(doc));
     if (items.length === 0) continue;
+    items = await LibraryDocuments.enrichPublicDocuments(items, {
+      docpaths: items.map((document) => `${folder}/${document.name}`),
+    });
 
     for (const doc of items) filenames[`${folder}/${doc.name}`] = doc.name;
     const pinnedWorkspacesByDocument =

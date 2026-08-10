@@ -8,6 +8,8 @@ import { ArrowUUpLeft, Eye, File, PushPin } from "@phosphor-icons/react";
 import Workspace from "@/models/workspace";
 import showToast from "@/utils/toast";
 import System from "@/models/system";
+import DocumentActions from "../../DocumentActions";
+import { getDocumentEffectiveName } from "@/utils/documentLibrary";
 
 export default function WorkspaceFileRow({
   item,
@@ -22,7 +24,9 @@ export default function WorkspaceFileRow({
   toggleSelection,
   disableSelection,
   setSelectedItems,
+  onDocumentUpdated,
 }) {
+  const effectiveName = getDocumentEffectiveName(item);
   const onRemoveClick = async (e) => {
     e.stopPropagation();
     setLoading(true);
@@ -69,7 +73,7 @@ export default function WorkspaceFileRow({
         className="col-span-10 w-fit flex gap-x-[2px] items-center relative"
         data-tooltip-id="ws-directory-item"
         data-tooltip-content={JSON.stringify({
-          title: item.title,
+          title: effectiveName,
           date: formatDateTimeAsMoment(item?.published),
           extension: getFileExtension(item.url),
         })}
@@ -94,13 +98,11 @@ export default function WorkspaceFileRow({
           weight="fill"
         />
         <p className="whitespace-nowrap overflow-hidden text-ellipsis max-w-[400px]">
-          {middleTruncate(item.title, 50)}
+          {middleTruncate(effectiveName, 50)}
         </p>
       </div>
       <div className="col-span-2 flex justify-end items-center">
-        {hasChanges ? (
-          <div className="w-4 h-4 ml-2 flex-shrink-0" />
-        ) : (
+        {!hasChanges && (
           <div className="flex gap-x-2 items-center">
             <WatchForChanges
               workspace={workspace}
@@ -115,6 +117,7 @@ export default function WorkspaceFileRow({
             <RemoveItemFromWorkspace item={item} onClick={onRemoveClick} />
           </div>
         )}
+        <DocumentActions item={item} onUpdated={onDocumentUpdated} />
       </div>
     </div>
   );

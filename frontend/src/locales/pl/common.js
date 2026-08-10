@@ -1989,6 +1989,19 @@ const TRANSLATIONS = {
       aborted: "Generowanie obrazu zostało przerwane.",
     },
   },
+  document_library: {
+    document_actions: "Document actions",
+    rename_document: "Rename display name",
+    download_original: "Download original file",
+    original_unavailable:
+      "No original file is available. This document may predate original-file retention or come from a web/text source.",
+    rename_title: "Rename document",
+    display_name: "Display name",
+    save_name: "Save",
+    rename_success: "Display name updated.",
+    rename_failed: "Could not update the display name.",
+    download_failed: "Could not start the original file download.",
+  },
 };
 
 export default TRANSLATIONS;
