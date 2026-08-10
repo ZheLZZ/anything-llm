@@ -33,6 +33,7 @@ function WorkspaceDirectory({
   hasChanges,
   saveChanges,
   movedItems,
+  onDocumentUpdated,
 }) {
   const { t } = useTranslation();
   const { embeddingProgressMap, removeQueuedFile } = useEmbeddingProgress();
@@ -245,6 +246,7 @@ function WorkspaceDirectory({
                       toggleSelection={() => toggleSelection(item)}
                       disableSelection={hasChanges}
                       setSelectedItems={setSelectedItems}
+                      onDocumentUpdated={onDocumentUpdated}
                     />
                   )}
                 </RenderFileRows>

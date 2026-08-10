@@ -4,6 +4,7 @@ import {
   getCustomImage,
 } from "../../ChatHistory/Citation";
 import { useTranslation } from "react-i18next";
+import { getSourceEffectiveTitle } from "@/utils/documentLibrary";
 
 export default function SourceItem({ source, onClick }) {
   const { t } = useTranslation();
@@ -26,7 +27,7 @@ export default function SourceItem({ source, onClick }) {
           customImage={customImage}
         />
         <p className="flex-1 font-medium text-sm text-white light:text-slate-900 leading-[15px] truncate">
-          {source.title}
+          {getSourceEffectiveTitle(source)}
         </p>
       </div>
       <div className="flex flex-col gap-[2px] pl-[22px] text-[10px] text-zinc-400 light:text-slate-500 leading-[14px]">

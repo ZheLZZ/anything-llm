@@ -19,6 +19,7 @@ import OutlookLogo from "@/pages/Admin/Agents/OutlookSkillPanel/outlook.png";
 import { toPercentString } from "@/utils/numbers";
 import { useTranslation } from "react-i18next";
 import { useSourcesSidebar } from "../../ChatSidebar";
+import { getSourceEffectiveTitle } from "@/utils/documentLibrary";
 
 const CIRCLE_ICONS = {
   file: FileText,
@@ -113,12 +114,15 @@ export function combineLikeSources(sources) {
   const combined = {};
   sources.forEach((source) => {
     const { id, title, text, chunkSource = "", score = null } = source;
-    if (combined.hasOwnProperty(title)) {
-      combined[title].chunks.push({ id, text, chunkSource, score });
-      combined[title].references += 1;
+    const effectiveTitle = getSourceEffectiveTitle(source);
+    const sourceKey = id || effectiveTitle;
+    if (combined.hasOwnProperty(sourceKey)) {
+      combined[sourceKey].chunks.push({ id, text, chunkSource, score });
+      combined[sourceKey].references += 1;
     } else {
-      combined[title] = {
-        title,
+      combined[sourceKey] = {
+        ...source,
+        title: effectiveTitle || title,
         chunks: [{ id, text, chunkSource, score }],
         references: 1,
       };

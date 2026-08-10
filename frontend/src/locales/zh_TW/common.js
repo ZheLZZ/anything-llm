@@ -1846,6 +1846,19 @@ const TRANSLATIONS = {
       aborted: "圖像生成已取消。",
     },
   },
+  document_library: {
+    document_actions: "資料操作",
+    rename_document: "修改顯示名稱",
+    download_original: "下載原始檔案",
+    original_unavailable:
+      "此資料沒有可下載的原始檔案，可能是在啟用原件保留功能之前上傳，或來源為網頁／純文字。",
+    rename_title: "修改資料顯示名稱",
+    display_name: "顯示名稱",
+    save_name: "儲存",
+    rename_success: "顯示名稱已更新。",
+    rename_failed: "無法更新顯示名稱。",
+    download_failed: "無法開始下載原始檔案。",
+  },
 };
 
 export default TRANSLATIONS;

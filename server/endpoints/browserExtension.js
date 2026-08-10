@@ -12,6 +12,9 @@ const {
   ROLES,
 } = require("../utils/middleware/multiUserProtected");
 const { Telemetry } = require("../models/telemetry");
+const {
+  registerSourceDocumentsSafely,
+} = require("../utils/files/libraryDocumentUpload");
 
 function browserExtensionEndpoints(app) {
   if (!app) return;
@@ -104,6 +107,7 @@ function browserExtensionEndpoints(app) {
           response.status(500).json({ success: false, error: reason });
           return;
         }
+        await registerSourceDocumentsSafely(documents, "connector");
 
         const { failedToEmbed = [], errors = [] } = await Document.addDocuments(
           workspace,
@@ -132,7 +136,7 @@ function browserExtensionEndpoints(app) {
       try {
         const { textContent, metadata } = reqBody(request);
         const Collector = new CollectorApi();
-        const { success, reason } = await Collector.processRawText(
+        const { success, reason, documents } = await Collector.processRawText(
           textContent,
           metadata
         );
@@ -141,6 +145,7 @@ function browserExtensionEndpoints(app) {
           response.status(500).json({ success: false, error: reason });
           return;
         }
+        await registerSourceDocumentsSafely(documents, "connector");
 
         await Telemetry.sendTelemetry("browser_extension_upload_content");
         response.status(200).json({ success: true });

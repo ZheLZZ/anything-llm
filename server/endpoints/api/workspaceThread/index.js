@@ -8,7 +8,7 @@ const { Telemetry } = require("../../../models/telemetry");
 const { EventLogs } = require("../../../models/eventLogs");
 const {
   writeResponseChunk,
-  convertToChatHistory,
+  convertToChatHistoryWithSourceAliases,
 } = require("../../../utils/helpers/chat/responses");
 const { WorkspaceChats } = require("../../../models/workspaceChats");
 const { User } = require("../../../models/user");
@@ -318,7 +318,9 @@ function apiWorkspaceThreadEndpoints(app) {
           { id: "asc" }
         );
 
-        response.status(200).json({ history: convertToChatHistory(history) });
+        response.status(200).json({
+          history: await convertToChatHistoryWithSourceAliases(history),
+        });
       } catch (e) {
         console.error(e.message, e);
         response.sendStatus(500).end();

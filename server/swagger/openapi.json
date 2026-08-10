@@ -1480,6 +1480,109 @@
         }
       }
     },
+    "/v1/document/{libraryDocumentId}/display-name": {
+      "patch": {
+        "tags": [
+          "Documents"
+        ],
+        "description": "Update the display-only name of a library document. This does not reparse, rechunk, re-embed, rename, move, or otherwise modify the processed document or its vectors.",
+        "parameters": [
+          {
+            "name": "libraryDocumentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stable library document ID."
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "displayName"
+                ],
+                "properties": {
+                  "displayName": {
+                    "type": "string",
+                    "maxLength": 255
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/document/{libraryDocumentId}/original": {
+      "get": {
+        "tags": [
+          "Documents"
+        ],
+        "description": "Download the retained original uploaded file for a library document. Historical, web, and raw-text documents may not have an original. The binary response uses the original filename in Content-Disposition.",
+        "parameters": [
+          {
+            "name": "libraryDocumentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stable library document ID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Original uploaded file.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "The document has no retained original or the stored file is missing."
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
     "/v1/document/{docName}": {
       "get": {
         "tags": [
@@ -1674,7 +1777,6 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
@@ -1685,7 +1787,8 @@
                   }
                 }
               }
-            }
+            },
+            "description": "OK"
           },
           "403": {
             "description": "Forbidden",
@@ -1701,9 +1804,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal Server Error"
           }
         },
         "requestBody": {

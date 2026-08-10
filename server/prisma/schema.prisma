@@ -124,6 +124,27 @@ model document_vectors {
   @@index([docId, chunkIndex])
 }
 
+// Persistent original document + display alias extension. This model is
+// intentionally independent from workspace_documents and vector metadata so
+// changing displayName never changes embeddings, chunks, or document paths.
+model library_documents {
+  id                   String    @id @default(uuid())
+  processedDocumentId  String?   @unique
+  docpath              String    @unique
+  displayName          String
+  sourceType           String    @default("unknown")
+  originalStorageKey   String?
+  originalFilename     String?
+  originalRelativePath String?
+  originalMimeType     String?
+  originalSizeBytes    String?
+  originalUploadedAt   DateTime?
+  createdAt            DateTime  @default(now())
+  lastUpdatedAt        DateTime  @default(now())
+
+  @@index([originalStorageKey])
+}
+
 model workspaces {
   id                           Int                            @id @default(autoincrement())
   name                         String

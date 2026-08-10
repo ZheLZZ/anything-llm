@@ -231,6 +231,29 @@ function convertToChatHistory(history = []) {
   return formattedHistory.flat();
 }
 
+async function convertToChatHistoryWithSourceAliases(history = []) {
+  const formatted = convertToChatHistory(history);
+  const allSources = formatted.flatMap((message) => message.sources || []);
+  if (!allSources.length) return formatted;
+
+  try {
+    const { LibraryDocuments } = require("../../../models/libraryDocuments");
+    const enriched = await LibraryDocuments.enrichSources(allSources);
+    let offset = 0;
+    return formatted.map((message) => {
+      if (!message.sources?.length) return message;
+      const sources = enriched.slice(offset, offset + message.sources.length);
+      offset += message.sources.length;
+      return { ...message, sources };
+    });
+  } catch (error) {
+    console.error(
+      `Chat source display-name enrichment failed (${error.code || "UNKNOWN"}).`
+    );
+    return formatted;
+  }
+}
+
 /**
  * Render a single saved survey as a tagged Q/A transcript for LLM history.
  * Mirrors the answer-casing rules in formatAnswersForAgent (request-user-input.js)
@@ -394,6 +417,7 @@ function formatChatHistory(
 module.exports = {
   handleDefaultStreamResponseV2,
   convertToChatHistory,
+  convertToChatHistoryWithSourceAliases,
   convertToPromptHistory,
   writeResponseChunk,
   clientAbortedHandler,

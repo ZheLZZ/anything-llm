@@ -9,16 +9,42 @@ const {
 } = require(".");
 const { Document } = require("../../models/documents");
 const { Workspace } = require("../../models/workspace");
+const { LibraryDocuments } = require("../../models/libraryDocuments");
+const { removeOriginalFile } = require("./originalDocumentStore");
+
+async function removeOriginalWhenUnreferenced(originalStorageKey) {
+  if (!originalStorageKey) return;
+  const references =
+    await LibraryDocuments.countReferencesToOriginalStorageKey(
+      originalStorageKey
+    );
+  if (references > 0) return;
+  try {
+    await removeOriginalFile(originalStorageKey);
+  } catch (error) {
+    // Keep deletion failures non-fatal. The opaque key and absolute path are
+    // intentionally omitted from logs; an orphan cleanup can retry later.
+    console.error(
+      `Failed to remove an unreferenced original (${error.code || "UNKNOWN"}).`
+    );
+  }
+}
 
 async function purgeDocument(filename = null) {
   if (!filename || !normalizePath(filename)) return;
 
-  await purgeVectorCache(filename);
-  await purgeSourceDocument(filename);
+  const libraryRecord = await LibraryDocuments.getByDocpath(filename);
   const workspaces = await Workspace.where();
   for (const workspace of workspaces) {
     await Document.removeDocuments(workspace, [filename]);
   }
+  await purgeVectorCache(filename);
+  await purgeSourceDocument(filename);
+
+  const removed = await LibraryDocuments.deleteByDocpath(filename);
+  await removeOriginalWhenUnreferenced(
+    removed?.originalStorageKey || libraryRecord?.originalStorageKey
+  );
   return;
 }
 
@@ -55,9 +81,14 @@ async function purgeFolder(folderName = null) {
 
   const filenames = fs
     .readdirSync(subFolderPath)
+    .filter((file) => fs.lstatSync(path.join(subFolderPath, file)).isFile())
     .map((file) =>
-      path.join(subFolderPath, file).replace(documentsPath + "/", "")
+      path
+        .relative(documentsPath, path.join(subFolderPath, file))
+        .split(path.sep)
+        .join("/")
     );
+  const libraryRecords = await LibraryDocuments.getByDocpaths(filenames);
   const workspaces = await Workspace.where();
 
   const purgePromises = [];
@@ -81,6 +112,27 @@ async function purgeFolder(folderName = null) {
 
   await Promise.all(purgePromises.flat().map((f) => f()));
   fs.rmSync(subFolderPath, { recursive: true }); // Delete target document-folder and source files.
+
+  const removedRecords = await LibraryDocuments.deleteByDocpaths(filenames);
+  const storageKeys = [
+    ...new Set(
+      [...libraryRecords, ...removedRecords]
+        .map((record) => record.originalStorageKey)
+        .filter(Boolean)
+    ),
+  ];
+  const referenced =
+    await LibraryDocuments.referencedOriginalStorageKeys(storageKeys);
+  for (const storageKey of storageKeys) {
+    if (referenced.has(storageKey)) continue;
+    try {
+      await removeOriginalFile(storageKey);
+    } catch (error) {
+      console.error(
+        `Failed to remove an unreferenced original (${error.code || "UNKNOWN"}).`
+      );
+    }
+  }
 
   return;
 }

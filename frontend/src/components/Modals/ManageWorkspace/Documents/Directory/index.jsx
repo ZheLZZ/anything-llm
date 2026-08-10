@@ -31,6 +31,7 @@ export default function Directory({
   hiddenPaths,
   setHighlightWorkspace,
   moveToWorkspace,
+  onDocumentUpdated,
 }) {
   const { t } = useTranslation();
   const [showFolderSelection, setShowFolderSelection] = useState(false);
@@ -349,6 +350,7 @@ export default function Directory({
                     onToggleFile={toggleFile}
                     onPrefetch={prefetchFolder}
                     onLoadMore={loadMore}
+                    onDocumentUpdated={onDocumentUpdated}
                     acceptsDrops={uploadQueue.ready}
                     onDropFiles={handleFolderDrop}
                   />

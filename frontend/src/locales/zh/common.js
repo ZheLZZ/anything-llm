@@ -1852,6 +1852,19 @@ const TRANSLATIONS = {
       aborted: "图像生成已终止。",
     },
   },
+  document_library: {
+    document_actions: "资料操作",
+    rename_document: "修改显示名称",
+    download_original: "下载原文件",
+    original_unavailable:
+      "该资料没有可下载的原文件，可能是在启用原件保留功能之前上传的，或来源为网页/纯文本。",
+    rename_title: "修改资料显示名称",
+    display_name: "显示名称",
+    save_name: "保存",
+    rename_success: "显示名称已更新。",
+    rename_failed: "无法更新显示名称。",
+    download_failed: "无法开始下载原文件。",
+  },
 };
 
 export default TRANSLATIONS;
