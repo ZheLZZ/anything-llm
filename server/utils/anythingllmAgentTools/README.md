@@ -1,10 +1,11 @@
 # AnythingLLM local Agent tools
 
-This adapter exposes three tool definitions without storing an API key in source code:
+This adapter exposes four tool definitions without storing an API key in source code:
 
 - `anythingllm_list_notebooks`
 - `anythingllm_search_notebook`
 - `anythingllm_read_chunk_context`
+- `anythingllm_query_notebook`
 
 Provide credentials in the local Agent process environment:
 
@@ -22,15 +23,12 @@ const {
 
 const tools = createAnythingLLMAgentTools();
 
-const list = tools.find(
-  ({ name }) => name === "anythingllm_list_notebooks"
-);
-const search = tools.find(
-  ({ name }) => name === "anythingllm_search_notebook"
-);
+const list = tools.find(({ name }) => name === "anythingllm_list_notebooks");
+const search = tools.find(({ name }) => name === "anythingllm_search_notebook");
 const context = tools.find(
   ({ name }) => name === "anythingllm_read_chunk_context"
 );
+const query = tools.find(({ name }) => name === "anythingllm_query_notebook");
 
 await list.handler({});
 const hits = await search.handler({
@@ -45,6 +43,15 @@ await context.handler({
   before: 2,
   after: 2,
 });
+const firstAnswer = await query.handler({
+  notebook: hits.notebook.slug,
+  question: "What are the main conclusions?",
+});
+await query.handler({
+  notebook: hits.notebook.slug,
+  question: "Summarize the first conclusion in one sentence.",
+  threadSlug: firstAnswer.thread.slug,
+});
 ```
 
 Workspace slugs take precedence over names. Duplicate names are rejected with
@@ -53,9 +60,22 @@ several hits from the same document have overlapping context ranges, the Agent
 should merge the ranges and deduplicate chunks by `vectorId` before prompting a
 model.
 
+`anythingllm_query_notebook` calls the Workspace Thread chat endpoint with
+`mode: "query"`. When `threadSlug` is omitted, it creates a real Thread that is
+visible in the AnythingLLM UI. Reuse `thread.slug` only for follow-up questions
+in the same intended notebook conversation.
+
+The tool returns the AnythingLLM-generated answer and compact source metadata.
+Raw source text, descriptions, distances, and other large retrieval fields are
+removed before the result reaches MCP. For this query tool, MCP
+`content[0].text` contains only the final generated answer; compact notebook,
+Thread, source, chat, and metrics data remains in `structuredContent`. Query
+calls are non-idempotent because AnythingLLM persists Thread chat history, and
+the configured Workspace model may be remote.
+
 ## MCP STDIO entry point
 
-mcpServer.js exposes the same three definitions through MCP without duplicating
+mcpServer.js exposes the same four definitions through MCP without duplicating
 their HTTP or validation logic. Start it from server with yarn mcp:anythingllm.
 
 The process uses STDIO for MCP messages. Do not write normal logs to stdout.

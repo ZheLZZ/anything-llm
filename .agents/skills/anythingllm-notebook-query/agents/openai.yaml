@@ -1,0 +1,14 @@
+interface:
+  display_name: "AnythingLLM Notebook Query"
+  short_description: "让 AnythingLLM 检索指定笔记本并用工作区模型生成带来源的答案"
+  default_prompt: "使用 $anythingllm-notebook-query 查询指定本地笔记本；每轮只问一个聚焦问题，复杂请求拆成多轮，再汇总 AnythingLLM 生成的答案和来源。"
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "anythingllm_local"
+      description: "Local AnythingLLM notebook query MCP server"
+      transport: "stdio"
+
+policy:
+  allow_implicit_invocation: true

@@ -10,11 +10,11 @@ const { createAnythingLLMAgentTools } = require("./index");
 
 const SERVER_INFO = {
   name: "anythingllm-local-retrieval",
-  version: "1.0.0",
+  version: "1.2.0",
 };
 
 const SERVER_INSTRUCTIONS =
-  "Search an AnythingLLM notebook before reading context. Expand only the hits needed to answer the request, normally with before=2 and after=2. Keep notebook boundaries intact, preserve source and chunk-position metadata, and deduplicate overlapping chunks by vectorId. Never expose API keys or embedding vectors.";
+  "Use vector search and bounded context for raw evidence. Use notebook query only when the caller wants AnythingLLM's configured workspace model to generate an answer. Notebook query creates a visible AnythingLLM Thread when threadSlug is omitted; reuse the returned thread.slug only within the intended notebook conversation. Its text result is the final generated answer, while structured sources are compact metadata without raw chunks. Never expose API keys or embedding vectors.";
 
 function structuredContentFor(value) {
   if (value !== null && typeof value === "object" && !Array.isArray(value))
@@ -22,10 +22,18 @@ function structuredContentFor(value) {
   return { result: value };
 }
 
-function successResult(value) {
+function successResult(value, textOverride = null) {
   const structuredContent = structuredContentFor(value);
   return {
-    content: [{ type: "text", text: JSON.stringify(structuredContent) }],
+    content: [
+      {
+        type: "text",
+        text:
+          typeof textOverride === "string"
+            ? textOverride
+            : JSON.stringify(structuredContent),
+      },
+    ],
     structuredContent,
   };
 }
@@ -62,6 +70,7 @@ function publicToolDefinition(tool) {
       destructiveHint: false,
       idempotentHint: true,
       openWorldHint: false,
+      ...(tool.annotations || {}),
     },
   };
 }
@@ -90,7 +99,10 @@ function createAnythingLLMMcpServer({ tools = null, ...clientOptions } = {}) {
       );
 
     try {
-      return successResult(await tool.handler(request.params.arguments || {}));
+      const value = await tool.handler(request.params.arguments || {});
+      const resultText =
+        typeof tool.resultText === "function" ? tool.resultText(value) : null;
+      return successResult(value, resultText);
     } catch (error) {
       return errorResult(error);
     }

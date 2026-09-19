@@ -1,9 +1,5 @@
-const {
-  Client,
-} = require("@modelcontextprotocol/sdk/client/index.js");
-const {
-  InMemoryTransport,
-} = require("@modelcontextprotocol/sdk/inMemory.js");
+const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
+const { InMemoryTransport } = require("@modelcontextprotocol/sdk/inMemory.js");
 const {
   createAnythingLLMMcpServer,
 } = require("../../../utils/anythingllmAgentTools/mcpServer");
@@ -35,9 +31,11 @@ describe("AnythingLLM MCP server", () => {
   });
 
   it("lists read-only tool definitions and calls a handler", async () => {
-    const handler = jest.fn().mockResolvedValue([
-      { name: "Notebook", slug: "notebook", documentCount: 2 },
-    ]);
+    const handler = jest
+      .fn()
+      .mockResolvedValue([
+        { name: "Notebook", slug: "notebook", documentCount: 2 },
+      ]);
     const tool = {
       name: "anythingllm_list_notebooks",
       description: "List notebooks.",
@@ -76,6 +74,59 @@ describe("AnythingLLM MCP server", () => {
     expect(JSON.parse(called.content[0].text)).toEqual(
       called.structuredContent
     );
+  });
+
+  it("publishes query annotations and returns only the answer as MCP text", async () => {
+    const queryResult = {
+      notebook: { name: "Notebook", slug: "notebook" },
+      thread: { name: "Codex query", slug: "thread" },
+      answer: "Generated answer",
+      sources: [{ title: "source.pdf" }],
+      sourceCount: 1,
+      hasSources: true,
+      chatId: 9,
+      metrics: {},
+    };
+    const { client, server } = await connectedClient([
+      {
+        name: "anythingllm_query_notebook",
+        description: "Query a notebook.",
+        inputSchema: { type: "object", properties: {} },
+        annotations: {
+          title: "Query an AnythingLLM notebook",
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
+        handler: jest.fn().mockResolvedValue(queryResult),
+        resultText: ({ answer }) => answer,
+      },
+    ]);
+    openClients.push(client);
+    openServers.push(server);
+
+    const listed = await client.listTools();
+    expect(listed.tools[0]).toMatchObject({
+      name: "anythingllm_query_notebook",
+      annotations: {
+        title: "Query an AnythingLLM notebook",
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    });
+
+    const called = await client.callTool({
+      name: "anythingllm_query_notebook",
+      arguments: { notebook: "Notebook", question: "Question" },
+    });
+    expect(called.content).toEqual([
+      { type: "text", text: "Generated answer" },
+    ]);
+    expect(called.structuredContent).toEqual(queryResult);
+    expect(called.content[0].text).not.toContain("source.pdf");
   });
 
   it("returns safe structured errors without response bodies or stacks", async () => {
