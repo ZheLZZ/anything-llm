@@ -163,6 +163,12 @@ RUN yarn install --production --network-timeout 100000 && yarn cache clean
 WORKDIR /app
 USER anythingllm
 
+# Install the PDF text extractor at build time, never during a user upload.
+RUN uv venv --python 3.12 /app/pdf-venv && \
+    uv pip install --python /app/pdf-venv/bin/python --only-binary :all: \
+        -r /app/collector/requirements-pdf.txt
+ENV PDF_PYTHON_PATH=/app/pdf-venv/bin/python
+
 # Since we are building from backend-build we just need to move built frontend into server/public
 FROM backend-build AS production-build
 WORKDIR /app
