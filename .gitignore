@@ -10,3 +10,22 @@ aws_cf_deploy_anything_llm.json
 yarn.lock
 *.bak
 .idea
+
+# Local-only runtime data and review artifacts. Keep example configuration public.
+.env.*
+!.env.example
+!.env.*.example
+.venv/
+.pdf-venv/
+/tmp/
+/output/
+/anythingllm-query-*.json
+/server/storage/
+/server/logs/
+/collector/storage/
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
