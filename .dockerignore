@@ -18,3 +18,28 @@
 **/.log
 !docker/.env.example
 !frontend/.env.production
+
+# Never include local query results or review artifacts in an image build.
+**/.git
+output/
+anythingllm-query-*.json
+**/.venv/
+**/.pdf-venv/
+**/server/storage/**
+**/server/logs/**
+**/collector/storage/tmp/**
+**/*.db-wal
+**/*.db-shm
+**/*.sqlite
+**/*.sqlite3
+**/*.sqlite-wal
+**/*.sqlite-shm
+
+# Retain only the bundled defaults from storage for fresh installations.
+!server/storage/assets/anything-llm.png
+!server/storage/assets/anything-llm-invert.png
+!server/storage/README.md
+!server/storage/documents/DOCUMENTS.md
+!server/storage/models/.gitignore
+!server/storage/models/README.md
+!server/storage/models/downloaded/.placeholder

@@ -21,7 +21,13 @@ async function asPdf({
 
   console.log(`-- Working ${filename} --`);
   const pageContent = [];
-  let docs = await pdfLoader.load();
+  let docs;
+  try {
+    docs = await pdfLoader.load();
+  } catch (error) {
+    console.error(`[asPDF] ${error.message}`);
+    return { success: false, reason: error.message, documents: [] };
+  }
 
   if (docs.length === 0) {
     console.log(
@@ -52,7 +58,7 @@ async function asPdf({
     };
   }
 
-  const content = pageContent.join("");
+  const content = pageContent.join("\n\n");
   const data = {
     id: v4(),
     url: "file://" + fullFilePath,
