@@ -102,7 +102,8 @@ function workspaceThreadEndpoints(app) {
     async (_, response) => {
       try {
         const thread = response.locals.thread;
-        await WorkspaceThread.delete({ id: thread.id });
+        const success = await WorkspaceThread.delete({ id: thread.id });
+        if (!success) return response.sendStatus(500).end();
         response.sendStatus(200).end();
       } catch (e) {
         console.error(e.message, e);
@@ -117,15 +118,21 @@ function workspaceThreadEndpoints(app) {
     async (request, response) => {
       try {
         const { slugs = [] } = reqBody(request);
+        if (
+          !Array.isArray(slugs) ||
+          slugs.some((slug) => typeof slug !== "string" || !slug.trim())
+        )
+          return response.sendStatus(400).end();
         if (slugs.length === 0) return response.sendStatus(200).end();
 
         const user = await userFromSession(request, response);
         const workspace = response.locals.workspace;
-        await WorkspaceThread.delete({
-          slug: { in: slugs },
+        const success = await WorkspaceThread.delete({
+          slug: { in: [...new Set(slugs)] },
           user_id: user?.id ?? null,
           workspace_id: workspace.id,
         });
+        if (!success) return response.sendStatus(500).end();
         response.sendStatus(200).end();
       } catch (e) {
         console.error(e.message, e);

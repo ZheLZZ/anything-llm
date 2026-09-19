@@ -1,4 +1,20 @@
 const TRANSLATIONS = {
+  "thread-management": {
+    manage: "Manage threads",
+    "select-all": "Select all",
+    selected: "{{count}} selected",
+    delete: "Delete ({{count}})",
+    cancel: "Cancel",
+    deleting: "Deleting…",
+    confirm:
+      'Delete {{count}} selected threads and their chat history from "{{workspace}}"? This cannot be undone. Workspace documents will be kept.',
+    success: "Deleted {{count}} threads.",
+    failed:
+      "Could not delete threads. Your selection has been kept. Please retry.",
+    "select-thread": "Select {{name}}",
+    unselectable:
+      "The default conversation and unsaved threads are not included in bulk deletion.",
+  },
   onboarding: {
     home: {
       welcome: "Welcome",

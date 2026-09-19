@@ -1,5 +1,19 @@
 // Anything with "null" requires a translation. Contribute to translation via a PR!
 const TRANSLATIONS = {
+  "thread-management": {
+    manage: "批量管理",
+    "select-all": "全选",
+    selected: "已选 {{count}} 条",
+    delete: "删除（{{count}}）",
+    cancel: "取消",
+    deleting: "正在删除…",
+    confirm:
+      "确认删除“{{workspace}}”中所选的 {{count}} 条对话及聊天记录？此操作无法撤销，工作区内的知识库文件会保留。",
+    success: "已删除 {{count}} 条对话。",
+    failed: "删除失败，已保留勾选，请重试。",
+    "select-thread": "选择 {{name}}",
+    unselectable: "默认对话和未保存的新对话不参与批量删除。",
+  },
   onboarding: {
     home: {
       getStarted: "开始",

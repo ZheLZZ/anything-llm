@@ -2,15 +2,10 @@ import useScrollActiveItemIntoView from "@/hooks/useScrollActiveItemIntoView";
 import Workspace from "@/models/workspace";
 import paths from "@/utils/paths";
 import showToast from "@/utils/toast";
-import {
-  ArrowCounterClockwise,
-  DotsThree,
-  PencilSimple,
-  Trash,
-  X,
-} from "@phosphor-icons/react";
+import { DotsThree, PencilSimple, Trash } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 const THREAD_CALLOUT_DETAIL_WIDTH = 26;
 export default function ThreadItem({
@@ -20,10 +15,13 @@ export default function ThreadItem({
   workspace,
   thread,
   onRemove,
-  toggleMarkForDeletion,
   hasNext,
-  ctrlPressed = false,
+  selectionMode = false,
+  selected = false,
+  onToggleSelection,
+  selectionDisabled = false,
 }) {
+  const { t } = useTranslation();
   const { slug: urlSlug, threadSlug = null } = useParams();
   const workspaceSlug = workspace?.slug ?? urlSlug;
   const optionsContainer = useRef(null);
@@ -51,7 +49,7 @@ export default function ThreadItem({
           isActive
             ? "border-l-2 border-b-2 border-white light:border-blue-800 z-[2]"
             : "border-l border-b border-zinc-500 light:border-slate-400 z-[1]"
-        } h-[50%] absolute top-0 left-3 rounded-bl-lg`}
+        } h-[50%] absolute top-0 left-3 rounded-bl-lg pointer-events-none`}
       ></div>
       {/* Downstroke border for next item */}
       {hasNext && (
@@ -61,40 +59,43 @@ export default function ThreadItem({
             idx <= activeIdx && !isActive
               ? "border-l-2 border-white light:border-blue-800 z-[2]"
               : "border-l border-zinc-500 light:border-slate-400 z-[1]"
-          } h-[100%] absolute top-0 left-3`}
+          } h-[100%] absolute top-0 left-3 pointer-events-none`}
         ></div>
       )}
 
       {/* Curved line inline placeholder for spacing - not visible */}
       <div
         style={{ width: THREAD_CALLOUT_DETAIL_WIDTH + 8 }}
-        className="h-full"
+        className="h-full shrink-0"
       />
       <div
-        className={`flex w-full items-center justify-between pr-2 group/thread relative ${isActive ? "bg-[var(--theme-sidebar-thread-selected)] light:bg-blue-200" : "hover:bg-theme-sidebar-subitem-hover light:hover:bg-slate-300"} rounded-[4px]`}
+        className={`flex w-full min-w-0 items-center justify-between pr-2 group/thread relative ${isActive ? "bg-[var(--theme-sidebar-thread-selected)] light:bg-blue-200" : "hover:bg-theme-sidebar-subitem-hover light:hover:bg-slate-300"} rounded-[4px]`}
       >
-        {thread.deleted ? (
-          <div className="w-full flex justify-between">
-            <div className="w-full pl-2 py-1">
-              <p
-                className={`text-left text-sm text-slate-400/50 light:text-slate-500 italic`}
-              >
-                deleted thread
-              </p>
-            </div>
-            {ctrlPressed && (
-              <button
-                type="button"
-                className="border-none"
-                onClick={() => toggleMarkForDeletion(thread.id)}
-              >
-                <ArrowCounterClockwise
-                  className="text-zinc-300 hover:text-white light:text-theme-text-secondary hover:light:text-theme-text-primary"
-                  size={18}
-                />
-              </button>
-            )}
-          </div>
+        {selectionMode ? (
+          <label
+            className={`flex w-full min-w-0 items-center gap-2 pl-2 py-1 text-theme-text-primary ${thread.slug ? "cursor-pointer" : "opacity-50"}`}
+            title={
+              thread.slug ? thread.name : t("thread-management.unselectable")
+            }
+          >
+            <input
+              type="checkbox"
+              className="h-4 w-4 shrink-0 accent-blue-600"
+              checked={selected}
+              disabled={selectionDisabled || !thread.slug || thread.virtual}
+              aria-label={t("thread-management.select-thread", {
+                name: thread.name,
+              })}
+              onChange={() => onToggleSelection(thread.slug)}
+            />
+            <span
+              className="truncate text-sm"
+              data-tooltip-id="workspace-thread-name"
+              data-tooltip-content={thread.name}
+            >
+              {thread.name}
+            </span>
+          </label>
         ) : (
           <Link
             ref={ref}
@@ -115,37 +116,21 @@ export default function ThreadItem({
             </p>
           </Link>
         )}
-        {!!thread.slug && !thread.deleted && !thread.virtual && (
+        {!!thread.slug && !selectionMode && !thread.virtual && (
           <div ref={optionsContainer} className="flex items-center">
-            {" "}
-            {/* Added flex and items-center */}
-            {ctrlPressed ? (
+            <div className="flex items-center w-fit md:invisible md:group-hover/thread:visible md:group-focus-within/thread:visible gap-x-1">
               <button
                 type="button"
                 className="border-none"
-                onClick={() => toggleMarkForDeletion(thread.id)}
+                onClick={() => setShowOptions(!showOptions)}
+                aria-label="Thread options"
               >
-                <X
-                  className="text-zinc-300 light:text-theme-text-secondary hover:text-white hover:light:text-theme-text-primary"
-                  weight="bold"
-                  size={18}
+                <DotsThree
+                  className="text-slate-300 light:text-theme-text-secondary hover:text-white hover:light:text-theme-text-primary"
+                  size={25}
                 />
               </button>
-            ) : (
-              <div className="flex items-center w-fit md:invisible md:group-hover/thread:visible md:group-focus-within/thread:visible gap-x-1">
-                <button
-                  type="button"
-                  className="border-none"
-                  onClick={() => setShowOptions(!showOptions)}
-                  aria-label="Thread options"
-                >
-                  <DotsThree
-                    className="text-slate-300 light:text-theme-text-secondary hover:text-white hover:light:text-theme-text-primary"
-                    size={25}
-                  />
-                </button>
-              </div>
-            )}
+            </div>
             {showOptions && (
               <OptionsMenu
                 containerRef={optionsContainer}
