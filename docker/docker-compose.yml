@@ -17,14 +17,18 @@ services:
       - SYS_ADMIN
     volumes:
       - "./.env:/app/server/.env"
+      # Collector runs from /app and reads dotenv from its working directory.
+      - "./.env:/app/.env:ro"
       - "../server/storage:/app/server/storage"
       - "../collector/hotdir/:/app/collector/hotdir"
       - "../collector/outputs/:/app/collector/outputs"
     user: "${UID:-1000}:${GID:-1000}"
     ports:
       - "3001:3001"
-    env_file:
-      - .env
+    # Keep UI-managed settings in the mounted .env: env_file would freeze
+    # their values at container creation and override later saves on restart.
+    environment:
+      STORAGE_DIR: /app/server/storage
     networks:
       - anything-llm
     extra_hosts:
